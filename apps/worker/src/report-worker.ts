@@ -10,6 +10,7 @@ import { computeSystemTags, isPromptBranded } from "@workspace/lib/tag-utils";
 import { extractRun } from "@workspace/lib/text-extraction";
 import { and, eq, inArray } from "drizzle-orm";
 import { mentionAnalyzer } from "./mention-judge";
+import { setTimeout as sleep } from "node:timers/promises";
 
 interface CompetitorResult {
 	name: string;
@@ -44,7 +45,7 @@ function getReportRunsForModel(model: string): number {
 		if (count === undefined) {
 			throw new Error(
 				`Whitelabel report generation has no run count configured for model "${model}". ` +
-					`Known models: ${Object.keys(WHITELABEL_REPORT_RUNS_PER_MODEL).join(", ")}.`,
+				`Known models: ${Object.keys(WHITELABEL_REPORT_RUNS_PER_MODEL).join(", ")}.`,
 			);
 		}
 		return count;
@@ -176,7 +177,7 @@ async function judgeWithRetries(text: string, config: MentionConfig, question: s
 		} catch (error) {
 			if (attempt >= JUDGE_ATTEMPTS) throw error;
 			console.error(`Mention judge failed (attempt ${attempt} of ${JUDGE_ATTEMPTS}); retrying:`, error);
-			await new Promise((resolve) => setTimeout(resolve, JUDGE_RETRY_DELAY_MS * attempt));
+			await sleep(JUDGE_RETRY_DELAY_MS * attempt);
 		}
 	}
 }
@@ -283,7 +284,7 @@ async function testCandidates(args: {
 		results.push(...(await Promise.all(candidatePrompts.slice(i, i + CANDIDATE_BATCH_SIZE).map(testOne))));
 		// Avoid sending a new provider burst immediately after the previous batch.
 		if (i + CANDIDATE_BATCH_SIZE < candidatePrompts.length)
-			await new Promise((resolve) => setTimeout(resolve, CANDIDATE_BATCH_PAUSE_MS));
+			if (i + CANDIDATE_BATCH_SIZE < candidatePrompts.length) await sleep(CANDIDATE_BATCH_PAUSE_MS);
 	}
 
 	// A report built from no answers would read as "never mentioned"; fail it instead.
@@ -348,13 +349,13 @@ export async function processReportJob(job: ReportJobContext) {
 
 		const candidatePrompts: { prompt: string; brandedPrompt: boolean }[] = useManualPrompts
 			? manualPrompts.map((prompt) => ({
-					prompt: prompt.toLowerCase().trim(),
-					brandedPrompt: isPromptBranded(prompt, brandName, brandWebsite, brandAliases),
-				}))
+				prompt: prompt.toLowerCase().trim(),
+				brandedPrompt: isPromptBranded(prompt, brandName, brandWebsite, brandAliases),
+			}))
 			: suggestion.suggestedPrompts.map((p) => ({
-					prompt: p.prompt,
-					brandedPrompt: isPromptBranded(p.prompt, brandName, brandWebsite, brandAliases),
-				}));
+				prompt: p.prompt,
+				brandedPrompt: isPromptBranded(p.prompt, brandName, brandWebsite, brandAliases),
+			}));
 
 		if (candidatePrompts.length === 0) {
 			job.log(`No candidate prompts available, report cannot continue`);
@@ -362,7 +363,7 @@ export async function processReportJob(job: ReportJobContext) {
 		}
 		job.log(
 			`${useManualPrompts ? "Using" : "Generated"} ${candidatePrompts.length} candidate prompts ` +
-				`(${candidatePrompts.filter((p) => p.brandedPrompt).length} branded)`,
+			`(${candidatePrompts.filter((p) => p.brandedPrompt).length} branded)`,
 		);
 
 		job.log(`Testing ${candidatePrompts.length} candidate prompts`);

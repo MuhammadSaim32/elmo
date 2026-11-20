@@ -12,7 +12,7 @@
 import { syncAuth0User } from "@workspace/deployment/auth-hooks/whitelabel";
 import { listAuth0Accounts } from "@workspace/lib/db/auth-sync";
 import type { Job } from "pg-boss";
-
+import { setTimeout as sleep } from "node:timers/promises";
 export interface SyncAuth0MembershipsData {
 	source: string;
 }
@@ -21,9 +21,7 @@ export interface SyncAuth0MembershipsData {
 const BATCH_SIZE = 5;
 const BATCH_DELAY_MS = 1000;
 
-function sleep(ms: number): Promise<void> {
-	return new Promise((resolve) => setTimeout(resolve, ms));
-}
+
 
 type Auth0Account = Awaited<ReturnType<typeof listAuth0Accounts>>[number];
 
